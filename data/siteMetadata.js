@@ -13,7 +13,7 @@ const siteMetadata = {
   mastodon: 'https://mastodon.social/@mastodonuser',
   email: 'mesmerize0416@naver.com',
   github: 'https://github.com/hyoribogo',
-  youtube: 'https://youtube.com@hyoribogo',
+  youtube: 'https://youtube.com/@hyoribogo',
   locale: 'ko-KR',
   analytics: {
     // If you want to use an analytics provider you have to add it to the
@@ -66,7 +66,7 @@ const siteMetadata = {
       // example: https://giscus.app/themes/custom_example.css
       themeURL: '',
       // This corresponds to the `data-lang="en"` in giscus's configurations
-      lang: 'en',
+      lang: 'ko',
     },
   },
   search: {
