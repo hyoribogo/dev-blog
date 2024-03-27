@@ -7,7 +7,7 @@
 
 /* Code title styles */
 .remark-code-title {
-  @apply rounded-t bg-zinc-700 px-5 py-3 font-mono text-sm font-bold text-gray-200 dark:bg-zinc-800;
+  @apply rounded-t bg-zinc-700 px-5 py-3 font-sans text-sm font-bold text-gray-200 dark:bg-zinc-800;
 }
 
 .remark-code-title + div > pre {
@@ -16,7 +16,7 @@
 
 /* Code block styles */
 .code-highlight {
-  @apply float-left min-w-full;
+  @apply float-left min-w-full font-sans;
 }
 
 .code-line {
@@ -52,7 +52,7 @@
 .token.prolog,
 .token.cdata {
   color: rgb(99, 119, 119);
-  font-style: italic;
+  /* font-style: italic; */
 }
 
 .token.punctuation {
