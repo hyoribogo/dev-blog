@@ -48,9 +48,6 @@ module.exports = {
             a: {
               textUnderlineOffset: '4px',
               color: theme('colors.primary.500'),
-              '&:hover': {
-                // color: `${theme('colors.primary.600')}`,
-              },
               'code:not(.code-highlight)': { color: theme('colors.primary.400') },
             },
             'h1,h2': {
@@ -62,17 +59,18 @@ module.exports = {
             },
             'code:not(.code-highlight)': {
               fontFamily: 'var(--font-pretendard)',
-              backgroundColor: theme('colors.primary.50'),
-              border: `1px solid ${theme('colors.primary.300')}`,
-              borderRadius: '0.25rem',
-              paddingInline: '0.25rem',
-              marginInline: '0.15rem',
-              '&::before': {
-                content: '""',
-              },
-              '&::after': {
-                content: '""',
-              },
+              // backgroundColor: theme('colors.primary.50'),
+              // border: `1px solid ${theme('colors.primary.300')}`,
+              // borderRadius: '0.25rem',
+              // paddingInline: '0.25rem',
+              // marginInline: '0.15rem',
+              color: theme('colors.amber.600'),
+              // '&::before': {
+              //   content: '""',
+              // },
+              // '&::after': {
+              //   content: '""',
+              // },
             },
             '.internal': {},
             '.anchor': {},
@@ -104,16 +102,18 @@ module.exports = {
               'code:not(.code-highlight)': { color: theme('colors.primary.400') },
             },
             'code:not(.code-highlight)': {
-              backgroundColor: theme('colors.gray.950'),
-              borderColor: theme('colors.gray.500'),
-              color: theme('colors.primary.500'),
+              color: theme('colors.amber.500'),
             },
             'h1,h2,h3,h4,h5,h6': {
               color: theme('colors.gray.100'),
             },
             '.external': {
-              color: theme('colors.primary.500'),
-              textDecorationColor: theme('colors.primary.500'),
+              color: theme('colors.primary.400'),
+              textDecorationColor: theme('colors.primary.400'),
+              '&:hover': {
+                color: theme('colors.primary.300'),
+                textDecorationColor: theme('colors.primary.300'),
+              },
             },
           },
         },

@@ -1,6 +1,6 @@
 const observerOption = {
   threshold: 0,
-  rootMargin: '-70px 0px 0px 0px',
+  rootMargin: '-100px 0px 0px 0px',
 }
 
 export const getHedingObserver = (headings: string[], callback: (id: string) => void) => {
