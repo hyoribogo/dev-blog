@@ -35,13 +35,11 @@ const TOC = ({ toc }: TOCProps) => {
         {toc.map(({ value, url, depth }) => (
           <li
             key={url}
-            className={`ml-${
-              (depth - 2) * 4
-            } pr-4 leading-8 transition-['font-size'] hover:text-black dark:hover:text-white ${
+            className={`pr-4 leading-8 transition-['font-size'] hover:text-black dark:hover:text-white ${
               currentId === url.slice(1)
                 ? 'text-[1.05rem] font-semibold text-black dark:text-white'
                 : 'text-gray-300'
-            }`}
+            } ${depth === 3 ? 'pl-4' : depth === 4 ? 'pl-8' : ''}`}
           >
             <a href={url}>{value}</a>
           </li>
