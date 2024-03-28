@@ -130,6 +130,7 @@ export default function PostLayout({ content, authorDetails, next, prev, childre
                     depth: number
                   }[]
                 }
+                className="hidden xl:block"
               />
             </footer>
           </div>

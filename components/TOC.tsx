@@ -9,9 +9,10 @@ interface TOCProps {
     url: string
     depth: number
   }[]
+  className?: string
 }
 
-const TOC = ({ toc }: TOCProps) => {
+const TOC = ({ toc, className }: TOCProps) => {
   const [currentId, setCurrentId] = useState('')
   const [_, setHeadingEls] = useState<Element[]>([])
   // TODO: 새로고침 시 currentId 초기화
@@ -30,7 +31,7 @@ const TOC = ({ toc }: TOCProps) => {
   }, [toc])
 
   return (
-    <nav className="sticky top-32 mb-[44rem] pt-8">
+    <nav className={`sticky top-32 mb-[44rem] pt-8 ${className ?? ''}`}>
       <ul>
         {toc.map(({ value, url, depth }) => (
           <li
