@@ -1,6 +1,6 @@
 'use client'
 
-import { getHedingObserver } from 'app/lib/observer'
+import { getHeadingObserver } from 'app/lib/observer'
 import { useEffect, useState } from 'react'
 
 interface TOCProps {
@@ -14,20 +14,22 @@ interface TOCProps {
 
 const TOC = ({ toc, className }: TOCProps) => {
   const [currentId, setCurrentId] = useState('')
-  const [_, setHeadingEls] = useState<Element[]>([])
-  // TODO: 새로고침 시 currentId 초기화
 
   useEffect(() => {
     const headings = toc.map(({ url }) => url.slice(1))
 
-    const observer = getHedingObserver(headings, setCurrentId)
-    const headingElements = Array.from(document.querySelectorAll('h2, h3'))
-
-    setHeadingEls(headingElements)
+    const observer = getHeadingObserver(headings, setCurrentId)
+    const headingElements = toc.map(({ url }) => document.getElementById(url.slice(1)))
 
     headingElements.map((header) => {
-      observer.observe(header)
+      observer.observe(header!)
     })
+
+    return () => {
+      headingElements.map((header) => {
+        observer.unobserve(header!)
+      })
+    }
   }, [toc])
 
   return (

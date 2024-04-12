@@ -3,17 +3,19 @@ const observerOption = {
   rootMargin: '-100px 0px 0px 0px',
 }
 
-export const getHedingObserver = (headings: string[], callback: (id: string) => void) => {
+export const getHeadingObserver = (headings: string[], callback: (id: string) => void) => {
   let direction = ''
-  let prevYposition = 0
+  let prevYposition = window.scrollY
 
   const checkScrollDirection = (prevY: number) => {
-    if (window.scrollY === 0 && prevY === 0) return
-    else if (window.scrollY > prevY) direction = 'down'
+    if (window.scrollY === prevY) return
+    if (window.scrollY > prevY) direction = 'down'
     else direction = 'up'
 
     prevYposition = window.scrollY
   }
+
+  callback(decodeURIComponent(window.location.hash).slice(1) || '')
 
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
