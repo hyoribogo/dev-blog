@@ -1,0 +1,386 @@
+---
+title: 'zustand 뜯어보기'
+date: '2024-05-17'
+tags: ['react']
+summary: 'zustand의 createStore, useStore, api에 대해 코드를 뜯어보면서 이해하는 시간을 가졌어요 😸'
+authors: ['default']
+layout: PostLayout
+canonicalUrl: https://hyoribogo.vercel.app/blog/zustand
+---
+
+## 들어가며
+
+3월에 리액트로 **클로저, 훅, 컨텍스트 API를 통해 직접 상태 관리를 구현**해보고, 상태 관리 라이브러리들은 어떤 식으로 구현되어 있는지 대략적으로 살펴봤었다.
+[(이전 글 보기)](/blog/implementing-react-state-management-library-from-scratch)
+
+최근에 모두의텃밭이라는 서비스를 개발하게 되면서, 상태 관리 라이브러리로 `zustand`를 사용하게 되었다. store를 작성하고 사용하는 게 굉장히 쉬워서 어떻게 상태 관리 시스템이 구현되어 있는지 궁금해졌다. 이번 글에서는 `zustand` 코드를 하나하나 뜯어보면서 이해하는 시간을 가져보려고 한다.
+
+<br />
+
+## zustand 작성 방법
+
+`zustand`를 작성하는 방법은 아주 간단하다.
+
+```ts:useBearStore.ts
+import { create } from 'zustand'
+
+const useBearStore = create((set) => ({
+  bears: 0,
+  increasePopulation: () => set((state) => ({ bears: state.bears + 1 })),
+  removeAllBears: () => set({ bears: 0 }),
+  updateBears: (newBears) => set({ bears: newBears }),
+}))
+```
+
+먼저 `create` 함수를 사용하여 상태를 생성한다. `create` 함수는 함수를 인자로 받는다. 이 함수는 `set` 함수를 인자로 받아서 상태를 업데이트한다.
+`create` 함수의 반환값으로 스토어 훅을 반환한다. 이 훅을 사용하여 상태를 관리하면 된다.
+
+<br />
+
+```tsx:Component.tsx
+function Component() {
+  const bears = useBearStore((state) => state.bears)
+  const increasePopulation = useBearStore((state) => state.increasePopulation)
+  const removeAllBears = useBearStore((state) => state.removeAllBears)
+  const updateBears = useBearStore((state) => state.updateBears)
+
+  return (
+    <div>
+      <h1>{bears}</h1>
+      <button onClick={increasePopulation}>Increase</button>
+      <button onClick={removeAllBears}>Remove All</button>
+      <button onClick={() => updateBears(10)}>Update</button>
+    </div>
+  )
+}
+```
+
+만든 useBearStore 훅에 selector 함수를 인자로 넣어서 상태를 가져올 수 있다. selector로 가져오는 값이 변경할 때에만 리렌더링이 된다.
+그럼 이제 `zustand`가 어떻게 리렌더링을 막고, 상태를 클로저로 관리하는지 알아보도록 하자.
+
+<br />
+
+## zustand 코드 살펴보기
+
+### 코드 전체 살펴보기
+
+상태를 관리하는 코드들만 모아서 가져와봤다. 작성일 기준 [4.5.2 버전의 코드](https://github.com/pmndrs/zustand/tree/main/src)이다.
+
+```ts:vanilla.ts
+const createStoreImpl: CreateStoreImpl = (createState) => {
+  type TState = ReturnType<typeof createState>
+  type Listener = (state: TState, prevState: TState) => void
+  let state: TState
+  const listeners: Set<Listener> = new Set()
+
+  const setState: StoreApi<TState>['setState'] = (partial, replace) => {
+    const nextState =
+      typeof partial === 'function'
+        ? (partial as (state: TState) => TState)(state)
+        : partial
+    if (!Object.is(nextState, state)) {
+      const previousState = state
+      state =
+        replace ?? (typeof nextState !== 'object' || nextState === null)
+          ? (nextState as TState)
+          : Object.assign({}, state, nextState)
+      listeners.forEach((listener) => listener(state, previousState))
+    }
+  }
+
+  const getState: StoreApi<TState>['getState'] = () => state
+
+  const getInitialState: StoreApi<TState>['getInitialState'] = () =>
+    initialState
+
+  const subscribe: StoreApi<TState>['subscribe'] = (listener) => {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  }
+
+  const destroy: StoreApi<TState>['destroy'] = () => {
+    if (import.meta.env?.MODE !== 'production') {
+      console.warn(
+        `[DEPRECATED] The `destroy` method will be unsupported in a
+        future version. Instead use unsubscribe function returned by subscribe.
+        Everything will be garbage-collected if store is garbage-collected.`,
+      )
+    }
+    listeners.clear()
+  }
+
+  const api = { setState, getState, getInitialState, subscribe, destroy }
+  const initialState = (state = createState(setState, getState, api))
+  return api as any
+}
+
+export const createStore = ((createState) =>
+  createState ? createStoreImpl(createState) : createStoreImpl) as CreateStore
+```
+
+```ts:react.ts
+export function useStore<TState, StateSlice>(
+  api: WithReact<StoreApi<TState>>,
+  selector: (state: TState) => StateSlice = identity as any,
+  equalityFn?: (a: StateSlice, b: StateSlice) => boolean,
+) {
+  if (
+    import.meta.env?.MODE !== 'production' &&
+    equalityFn &&
+    !didWarnAboutEqualityFn
+  ) {
+    console.warn(
+      "[DEPRECATED] Use `createWithEqualityFn` i...",
+    )
+    didWarnAboutEqualityFn = true
+  }
+  const slice = useSyncExternalStoreWithSelector(
+    api.subscribe,
+    api.getState,
+    api.getServerState || api.getInitialState,
+    selector,
+    equalityFn,
+  )
+  useDebugValue(slice)
+  return slice
+}
+
+const createImpl = <T>(createState: StateCreator<T, [], []>) => {
+  if (
+    import.meta.env?.MODE !== 'production' &&
+    typeof createState !== 'function'
+  ) {
+    console.warn(
+      "[DEPRECATED] Passing ...",
+    )
+  }
+  const api =
+    typeof createState === 'function' ? createStore(createState) : createState
+
+  const useBoundStore: any = (selector?: any, equalityFn?: any) =>
+    useStore(api, selector, equalityFn)
+
+  Object.assign(useBoundStore, api)
+
+  return useBoundStore
+}
+
+export const create = (<T>(createState: StateCreator<T, [], []> | undefined) =>
+  createState ? createImpl(createState) : createImpl) as Create
+```
+
+코드가 굉장히 길고 복잡해보인다. 하나씩 단계별로 살펴보도록 한다.
+
+<br />
+
+### create
+
+```ts
+const useBearStore = create((set) => ({
+  bears: 0,
+  increasePopulation: () => set((state) => ({ bears: state.bears + 1 })),
+  removeAllBears: () => set({ bears: 0 }),
+  updateBears: (newBears) => set({ bears: newBears }),
+}))
+```
+
+처음에 우리가 create 함수를 호출해 훅을 만들었었다.
+
+<br />
+
+```ts
+export const create = (<T>(createState: StateCreator<T, [], []> | undefined) =>
+  createState ? createImpl(createState) : createImpl) as Create
+```
+
+우리는 createState(setter를 인자로 받고, state를 반환하는 함수)를 create에 전달해주었다.
+createState를 전달했으므로 createImpl 함수를 호출하게 된다.
+
+```ts
+const createImpl = <T>(createState: StateCreator<T, [], []>) => {
+  if (import.meta.env?.MODE !== 'production' && typeof createState !== 'function') {
+    console.warn('[DEPRECATED] Passing ...')
+  }
+  const api = typeof createState === 'function' ? createStore(createState) : createState
+
+  const useBoundStore: any = (selector?: any, equalityFn?: any) =>
+    useStore(api, selector, equalityFn)
+
+  Object.assign(useBoundStore, api)
+
+  return useBoundStore
+}
+```
+
+**여기서 나오는 api, createStore, useStore가 중요하다.**
+
+먼저 api에 createStore를 호출하여 반환 받은 값을 저장해주는데,
+createStore는 말 그대로 클로저 상태를 생성해 반환하는 함수다.
+
+<br />
+
+### createStore
+
+> 클로저 상태를 생성해 반환하는 함수
+
+```ts
+export const createStore = ((createState) =>
+  createState ? createStoreImpl(createState) : createStoreImpl) as CreateStore
+```
+
+createStore에서도 createState가 존재한다면 createStoreImpl 함수를 호출하게 된다.
+createStoreImpl는 저번 글에서 구현한 [createStore](/blog/implementing-react-state-management-library-from-scratch#세-번째-시도-외부-객체와-훅을-함께-활용해-상태-관리하기)와 굉장히 유사하게 작성되어 있다.
+
+```ts
+const createStoreImpl: CreateStoreImpl = (createState) => {
+  type TState = ReturnType<typeof createState>
+  type Listener = (state: TState, prevState: TState) => void
+  let state: TState // state를 클로저로 관리
+  const listeners: Set<Listener> = new Set() // 콜백 함수들을 저장. 여기서는 리스너라고 부름
+
+  // partial은 일부분만 변경하고 싶을 때, replace는 전체를 변경하고 싶을 때 사용
+  const setState: StoreApi<TState>['setState'] = (partial, replace) => {
+    const nextState =
+      typeof partial === 'function' ? (partial as (state: TState) => TState)(state) : partial
+    if (!Object.is(nextState, state)) {
+      const previousState = state
+      state =
+        replace ?? (typeof nextState !== 'object' || nextState === null)
+          ? (nextState as TState)
+          : Object.assign({}, state, nextState)
+      listeners.forEach((listener) => listener(state, previousState)) // 콜백 호출을 통해 상태 변경을 알림.
+    }
+  }
+
+  const getState: StoreApi<TState>['getState'] = () => state // 최신 상태의 state를 반환
+
+  const getInitialState: StoreApi<TState>['getInitialState'] = () => initialState // 초기 state를 반환
+
+  const subscribe: StoreApi<TState>['subscribe'] = (listener) => {
+    listeners.add(listener) // 구독
+    return () => listeners.delete(listener) // 클린업 함수로 구독 해제하는 함수 반환
+  }
+
+  const destroy: StoreApi<TState>['destroy'] = () => {
+    if (import.meta.env?.MODE !== 'production') {
+      console.warn(`대충 경고 메시지`)
+    }
+    listeners.clear()
+  }
+
+  // api에 setState, getState, getInitialState, subscribe, destroy를 저장
+  const api = { setState, getState, getInitialState, subscribe, destroy }
+  const initialState = (state = createState(setState, getState, api))
+  return api as any
+}
+```
+
+여기서 보면 알 수 있듯이 state를 let으로 선언해 클로저로 관리하고 있다.
+setState는 우리가 `increasePopulation: () => set((state) => ({ bears: state.bears + 1 }))`로 setter 메서드를 작성할 때 **set** 함수를 말한다.
+
+처음에 initialState와 state에는 createState를 호출한 값, 즉 `{ bears: 0, increasePopulation: () => set((state) => ({ bears: state.bears + 1 })), ... }`가 저장된다.
+또한 api에 setState, getState, getInitialState, subscribe, destroy를 저장한 후 반환한다.
+
+이 createStore는 `vanills.ts`에 구현되어 있는데, 어떤 프레임워크로부터 완전히 독립적으로 구성되어 있다.
+따라서 자바스크립트 환경에서도 사용할 수 있다.
+
+<br />
+
+```ts:createImpl
+const api =
+  typeof createState === 'function' ? createStore(createState) : createState
+
+const useBoundStore: any = (selector?: any, equalityFn?: any) =>
+  useStore(api, selector, equalityFn)
+
+Object.assign(useBoundStore, api)
+
+return useBoundStore
+```
+
+다시 돌아와서, useBoundStore는 selector와 equalityFn을 매개변수로 받는다.
+우리가 `useBearStore((state) => state.bears)`를 작성했을 때, `(state) => state.bears`가 바로 selector이다.
+이 함수는 또 useStore를 호출한 결과를 반환한다.
+
+### useStore
+
+> 리액트 내에서 리렌더링을 유발하기 위해 사용하는 훅
+
+```ts
+export function useStore<TState, StateSlice>(
+  api: WithReact<StoreApi<TState>>,
+  selector: (state: TState) => StateSlice = identity as any,
+  equalityFn?: (a: StateSlice, b: StateSlice) => boolean
+) {
+  if (import.meta.env?.MODE !== 'production' && equalityFn && !didWarnAboutEqualityFn) {
+    console.warn('[DEPRECATED] Use `createWithEqualityFn` i...')
+    didWarnAboutEqualityFn = true
+  }
+  const slice = useSyncExternalStoreWithSelector(
+    api.subscribe,
+    api.getState,
+    api.getServerState || api.getInitialState,
+    selector,
+    equalityFn
+  )
+  useDebugValue(slice)
+  return slice
+}
+```
+
+`const bears = useBearStore((state) => state.bears)`를 작성했을 때, bears는 useStore의 반환값이 되어야 할 것이다.
+
+여기서 useSyncExternalStoreWithSelector 훅을 사용하고 있는데(이름부터 무척 길다.)
+아마 [useSyncExternalStore](https://react-ko.dev/reference/react/useSyncExternalStore)를 확장해 만든 훅인 것 같다. 리액트 프로젝트에서 따로 import 되지 않아서 공식 지원을 하는 건지 정보를 검색해봤는데, 사실 자세하게 찾진 못했다. 아무튼 외부 상태를 동기화하는 훅으로, slice는 selector를 통해 가져온 값이다.
+
+또한 [useDebugValue](https://react-ko.dev/reference/react/useDebugValue)를 통해 slice를 디버깅할 수 있게 해준다. React 개발자 도구에서 Store: slice를 확인하기 위해 넣은 것 같다.
+
+<br />
+
+## 더 쉽게 요악해보기
+
+살펴보니 알 것도 같고, 모르는 것도 많은 것 같다. 그래서 순서대로 다시 쉽게 요약을 해보면 다음과 같다.
+
+1. `create` 함수를 호출하여 상태를 생성한다.
+
+```ts
+const useBearStore = create((set) => ({
+  bears: 0,
+  increasePopulation: () => set((state) => ({ bears: state.bears + 1 })),
+  removeAllBears: () => set({ bears: 0 }),
+  updateBears: (newBears) => set({ bears: newBears }),
+}))
+```
+
+2. `create`는 `createStore`를 통해 클로저 상태에 대한 함수를 생성하고, `useBoundStore`를 반환한다. 예제에서 **useBearStore = useBoundStore**이다.
+
+- `createStore`는 getState, setState, subscribe 등 api를 반환한다. 여기서 **setState**는 create에 전달한 콜백 함수의 반환값에 있는 setter 메서드들을 호출할 때 실행되며, **상태를 업데이트**한다. 예제에서는 setter 메서드로 increasePopulation, removeAllBears, updateBears가 있다.
+- `useBoundStore`는 `useStore`를 호출한다. useStore를 통해 외부 상태를 동기화하고, **값이 변화할 때(=setState가 실행될 때) 리렌더링을 유발**한다. slice로 원하는 값을 가져올 수 있다.
+
+3. 사용자가 useBearStore에 셀렉터 함수를 담아 호출한다.
+
+```ts
+const bears = useBearStore((state) => state.bears)
+```
+
+4. `useStore`에서 `useSyncExternalStoreWithSelector`에 api, selector 등을 전달해 slice를 반환한다. 예제에서 **slice = bears** 값이다.
+
+5. bears 값이 변할 때마다 리렌더링이 일어난다.
+
+<br />
+
+## zustand의 장점
+
+<img src="https://i.ibb.co/ZBqhhRn/2024-05-17-235555.png" />
+`zustand`는 번들포비아에서 봤을 때, 번들 사이즈가 3.1KB로, `recoil`이나 `zotai`보다 더 가볍다. 사용 방법뿐만
+아니라 용량에서도 굉장히 효율적인 라이브러리라고 할 수 있다.
+
+<br />
+
+<hr />
+
+## 마치며
+
+`zustand`가 어떤 식으로 구현되어 있는지 살펴보았다. 다음에는 `useSyncExternalStoreWithSelector`를 비슷하게 구현하여 최소한의 `zustand` 라이브러리를 만들어보려고 한다.
+
+<br />
