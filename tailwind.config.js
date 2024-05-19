@@ -57,6 +57,10 @@ module.exports = {
             h3: {
               fontWeight: '600',
             },
+            '.prose :where(.prose > ul > li > *:first-child):not(:where([class~="not-prose"],[class~="not-prose"] *))':
+              {
+                margin: 0,
+              },
             'code:not(.code-highlight)': {
               fontFamily: 'var(--font-pretendard)',
               // backgroundColor: theme('colors.primary.50'),
