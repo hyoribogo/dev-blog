@@ -1,0 +1,369 @@
+---
+title: 'Next.js로 다국어(i18n) 지원하기'
+date: '2024-08-12'
+tags: ['react']
+summary: '어렵게만 느껴졌던 i18n에 대해 학습하게 된 이유'
+authors: ['default']
+layout: PostLayout
+canonicalUrl: https://hyoribogo.vercel.app/blog/i18n
+---
+
+## 들어가며
+
+취준 때마다 신입 공고를 보다 보면 간혹 **i18n**에 대한 항목이 있는 것을 발견하곤 했다. **국제화, 다국어 지원**이라는 키워드 자체가 생소하고 어렵게 느껴져서 구현하는 것도 쉽지 않을 거라 생각했었다.
+
+하지만 지금 회사에 입사하고 보니 회사 서비스가 한글과 영문으로 운영되고 있었다. 그래서 국제화 및 다국어 지원에 대해 학습하고자 블로그 글을 쓰게 되었다!
+
+> **국제화(Internationalization)는 문화, 지역, 언어가 다양한 대상 고객을 위해 쉽게 현지화할 수 있는** 제품, 애플리케이션 또는 문서 콘텐츠를 설계하고 개발하는 것입니다([W3C](https://developer.mozilla.org/ko/docs/Glossary/W3C) 정의에 따름).
+> 
+
+Next.js에서 국제화를 지원하는 여러 라이브러리가 있지만 회사에서 사용하는 `next-i18next`라는 라이브러리를 학습해보았다.
+
+오늘은 간단하게 설치 및 세팅 방법과 버튼을 통한 동적 언어 변경 예제 코드를 작성해 볼 것이다.
+
+<br />
+
+## Next.js에서 i18n 구현하기
+
+기본적으로 Next.js는 [국제화에 대한 옵션](https://nextjs.org/docs/app/building-your-application/routing/internationalization)을 이미 갖추고 있다. 그래서 config 파일에서 `i18n` 옵션을 따로 설정할 수 있다. 
+
+Next.js는 locale과 URL을 동기화하는 역할을 수행한다. 예를 들어, 영어 사용자를 위한 `/en` 페이지와 한국어 사용자를 위한 `/ko` 페이지가 있을 수 있다.
+
+[next-i18next](https://github.com/i18next/next-i18next)는 Next.js가 제공하지 않는 번역 관련 기능을 추가로 제공한다.
+번역 콘텐츠를 JSON 파일로 저장해두면, 이 파일을 읽어 자동으로 번역 처리를 해준다.
+
+<br />
+
+### 라이브러리 설치
+
+```bash
+npm i next-i18next
+```
+
+`next-i18next`를 설치하면  `i18next`, `react-18next`도 함께 설치된다.
+
+<br />
+
+### 세팅하기
+
+```js:next-i18next.config.js
+/** @type {import('next-i18next').UserConfig} */
+module.exports = {
+  i18n: {
+    locales: ["en", "ko"],
+    defaultLocale: "en",
+  },
+};
+
+```
+
+다양한 옵션들이 있지만 대표적으로 `locales`와 `defaultLocale`가 있다.
+
+- `locales`: **애플리케이션에서 지원하는 언어의 목록**을 정의한다. 영어와 한국어만 사용한다면 배열에 en, ko를 작성하면 된다.
+- `defaultLocale`: **애플리케이션의 기본 언어**를 설정한다. 처음 로드될 때 혹은 처음 방문할 때 해당 언어로 보여줄 수 있다.
+
+우리는 기본 언어를 영어로 설정했기 때문에 `/`로 접속하면 기본 제공 언어가 영어가 되고, `/ko`로 접속하면 한글이 된다.
+
+
+```js:next-i18next.config.js
+/** @type {import('next-i18next').UserConfig} */
+```
+
+jsdoc으로 타입을 가져와야 옵션에 대한 자동완성 기능을 사용할 수 있다.
+<img src="https://i.ibb.co/fv2Rvsb/image.png" alt="image" border="0" />
+
+<br />
+
+```js:next.config.js
+const { i18n } = require("./next-i18next.config")
+
+/** @type {import('next').NextConfig} */
+module.exports = {
+  i18n,
+  // ...
+}
+
+```
+
+그리고 위에서 언급했듯 Next.js에는 이미 i18n 옵션이 있기 때문에, 작성한 `next-i18next.config`를 가져와 적용해주면 된다.
+
+```plaintext
+.
+└── public
+    └── locales
+        ├── en
+        |   └── common.json
+        └── ko
+            └── common.json
+```
+
+이제 번역 파일들을 작성해준다. 우리는 영어와 한국어 두 개를 사용하기 때문에 en, ko 폴더 두 개를 생성 후 같은 이름의 JSON 파일들을 만들면 된다. 여기서 파일명은 `네임스페이스`라고 부른다.
+
+```json:en/common.json
+{
+  "greeting": "Hello",
+  "change_language": "Change Language"
+}
+
+```
+
+```json:ko/common.json
+{
+  "greeting": "안녕하세요",
+  "change_language": "언어 변경"
+}
+
+```
+
+
+`common` 네임스페이스의 같은 key에 값만 각각의 언어로 작성해주었다. 이러면 next-i18next가 알아서 파일들을 읽고 처리해준다.
+
+
+**참고로 앱 라우터가 아닌 페이지 라우터 환경에서 구현했다.**
+
+앱 라우터는 지금도 지원하지 않는다는 말들이 있는데, [관련 이슈](https://github.com/i18next/next-i18next/discussions/1993)에서 확인할 수 있다.
+
+페이지 라우터 방식의 예제 코드들은 `next-i18next` [공식 문서](https://github.com/i18next/next-i18next/tree/master/examples/simple)에서 확인할 수 있다.
+
+
+```tsx:_app.tsx
+import { appWithTranslation } from 'next-i18next'
+
+const MyApp = ({ Component, pageProps }) => (
+  <Component {...pageProps} />
+)
+
+export default appWithTranslation(MyApp)
+
+```
+
+`appWithTranslation`는 react-i18next의 [I18nextProvider](https://react.i18next.com/latest/i18nextprovider)를 활용해 만든 **HOC**다. `_app`에서 감싸서 export 해준다.
+
+<br />
+
+### 서버 사이드 번역
+
+```tsx
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
+
+export async function getStaticProps({ locale }) {
+  return {
+    props: {
+      ...(await serverSideTranslations(locale, [
+        'common',
+      ])),
+      // Will be passed to the page component as props
+    },
+  }
+}
+```
+
+`getStaticProps` 혹은 `getServerSideProps` 메서드에서 props로 데이터를 넘겨줄 수 있다.
+
+즉 페이지가 빌드되거나 서버에서 요청될 때 미리 번역 리소스를 로드하는 것이다.
+
+만약 `common.json`이라는 파일을 만들었다면 `serverSideTranslations` 두 번째 인자의 배열 요소로 `common` 네임스페이스를 전달해주면 된다.
+
+**해당 로직은 서버에서 미리 번역이 필요할 경우 반드시 작성해주어야 한다.**
+
+<br />
+
+### 클라이언트 사이드 번역
+
+```tsx
+import { useTranslation } from 'next-i18next'
+
+export const Example = () => {
+  const { t } = useTranslation('common')
+
+  return (
+    <div>
+      <p>{t('greeting')}</p>
+    </div>
+  )
+}
+```
+
+**사용자 상호작용 같은 동적인 처리**를 처리하기 위해 `useTranslation` 훅을 사용할 수 있다. 이 훅은 `react-i18next`에서 import 하면 안 된다. 무조건 `next-i18next`에서 import를 해야 한다.
+
+그리고 `t`라는 함수에 `common` 파일에 있는 번역 객체의 키인 `greeting`을 전달해 호출한다.
+
+이제 p 안의 요소는 접속한 URL에 따라 “Hello” 혹은 “안녕하세요”로 표시될 것이다.
+
+```tsx
+// 만약 depth가 깊은 객체라면?
+{
+  "depth1": {
+	  "depth2": {
+			"depth3": "message"
+			}
+		}
+  }
+}
+```
+
+depth가 깊은 객체 형태로 되어 있다면 `t('depth1.depth2.depth3.message')`와 같은 형태로 호출하면 된다.
+
+<br />
+
+### 언어 변경 버튼 구현하기
+
+컴포넌트 내에서 언어를 동적으로 변경하는 데에는 [다양한 방법](https://github.com/i18next/next-i18next/blob/master/examples/simple/pages/index.tsx)이 존재한다.
+
+나는 `useRouter`를 활용해 구현했다.
+
+```tsx
+import { GetStaticProps } from "next";
+import { useTranslation } from "next-i18next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { useRouter } from "next/router";
+
+export default function Language() {
+  const { t } = useTranslation("common");
+  const router = useRouter();
+
+  const changeLanguage = (lang: "ko" | "en") => {
+    router.push(router.pathname, router.asPath, { locale: lang });
+  };
+
+  return (
+    <div>
+      <h1>{t("greeting")}</h1>
+      <button onClick={() => changeLanguage("en")}>English</button>
+      <button onClick={() => changeLanguage("ko")}>한국어</button>
+    </div>
+  );
+}
+
+export const getStaticProps: GetStaticProps = async ({ locale }) => {
+  return {
+    props: {
+      ...(await serverSideTranslations(locale ?? "en", ["common"])),
+    },
+  };
+};
+
+```
+
+코드를 살펴보면, `changeLanguage` 함수를 통해 언어를 변경하는 것을 확인할 수 있다.
+
+```tsx
+const changeLanguage = (lang: "ko" | "en") => {
+  router.push(router.pathname, router.asPath, { locale: lang });
+};
+```
+
+[router.push](https://nextjs.org/docs/pages/api-reference/functions/use-router#routerpush) 메서드를 통해 직접 원하는 언어로 locale을 변경할 수 있다.
+
+<div style={{ display: 'flex', gap: '10px' }} >
+  <img src="https://i.ibb.co/zxnC6v7/image-1.png" alt="image-1" border="0" />
+  <img src="https://i.ibb.co/G27XhT2/image-2.png" alt="image-2" border="0" />
+</div>
+
+`ko` locale이 붙으면 `greeting`이 “안녕하세요”로 뜨게 된다. 또한 "English" 부분을 클릭하면 영어로, "한국어" 부분을 클릭하면 한국어로 바뀌는 것을 확인할 수 있다.
+
+<br />
+
+### 타입스크립트
+
+번역 데이터가 많아지면 t 함수를 사용할 때 해당 키 문자열을 작성하기 귀찮아질 수 있다. 자동완성을 위해 타입 파일을 추가해보자.
+
+[https://www.i18next.com/overview/typescript](https://www.i18next.com/overview/typescript)
+
+타입을 사용하려면 `i18next.d.ts` 파일을 작성해야 한다. [simple 예제](https://github.com/i18next/next-i18next/tree/master/examples/simple)에 있는 `@types` 폴더를 살펴보자.
+
+<img src="https://i.ibb.co/JCmvwcZ/image-3.png" alt="image-3" border="0" />
+
+`i18next.d.ts` 파일과 `resources.ts` 파일 두 개가 있는 것을 확인할 수 있다.
+
+
+```tsx:i18next.d.ts
+import "i18next";
+
+import resources from "./resources.ts";
+
+declare module "i18next" {
+  interface CustomTypeOptions {
+    defaultNS: "common";
+    resources: typeof resources;
+  }
+}
+
+```
+
+`CustomTypeOptions`이라는 인터페이스를 직접 작성해 타입을 추가해야 한다.
+`resources.ts` 에 있는 타입을 통해 전달해주고 있다.
+
+
+```tsx:resources.ts
+import common from '../public/locales/en/common.json';
+import footer from '../public/locales/en/footer.json';
+import secondpage from '../public/locales/en/second-page.json';
+
+const resources = {
+  common,
+  footer,
+  'second-page': secondpage
+} as const;
+
+export default resources;
+```
+
+우리가 직접 추가해놓은 번역 데이터 JSON 파일들을 가져와 해당 객체의 타입을 사용한 것으로 보인다. 그럼 매번 번역 데이터를 추가하거나 수정할 때마다 해당 파일도 수정해야 할까?
+
+물론 그렇지 않다. 👍
+
+사실 해당 예제에 지운 주석에는 "resources.ts file is generated with npm run toc"라는 문구가 있었다. **자동으로 생성해주는 명령어**가 있는 것이다. `package.json` 의 scripts를 살펴보면 다음 명령어를 발견할 수 있다.
+
+```json:package.json
+"toc": "i18next-resources-for-ts toc -i ./public/locales/en -o ./@types/resources.ts",
+```
+
+[i18next-resources-for-ts](https://github.com/i18next/i18next-resources-for-ts)라는 라이브러리를 사용한 것으로 보인다. 
+
+```bash
+npx i18next-resources-for-ts subcommand -i ./public/locales/en -o ./@types/resources.ts
+```
+
+이런 식으로 **input path**와 **output path**를 포함한 npx 명령어를 입력해주면, 자동으로 스크립트가 추가된다.
+
+이제 `npm run toc`로 `resources.ts` 파일을 자동 생성 해보자.
+
+```bash
+npm run toc
+```
+
+<img src="https://i.ibb.co/k8qB1cv/image-4.png" alt="image-4" border="0" />
+
+```ts:resources.ts
+import common from '../../public/locales/en/common.json';
+
+const resources = {
+  common
+} as const;
+
+export default resources;
+
+```
+
+잘 생성된 것을 확인할 수 있다.
+
+
+<img src="https://i.ibb.co/QcKNTmK/image-5.png" alt="image-5" border="0" />
+
+이제 자동완성으로 데이터를 더 편하게 선택할 수 있게 되었다.
+
+`toc` 말고도 `merge`나 `interface` 같은 명령어들도 있으니 상황에 맞게 활용하면 된다.
+
+- **`merge`**: 여러 번역 리소스를 병합하여 단일 타입스크립트 타입으로 만드는 옵션
+- **`interface`**: 변환된 타입스크립트 타입을 인터페이스로 생성하는 옵션
+
+<br />
+
+## 마치며
+
+간단하게나마 다국어 지원에 대해 구현해보았다.
+
+하지만 번역 데이터를 작성할 때 **각각의 JSON 파일을 생성해 따로 작성해야 하는 불편함**이 있다. 이는 데이터가 많아질수록 실수하기도 쉬울 것이다. 다음에는 json 파일을 구글시트 같은 외부에서 자유롭게 편집하고 이를 자동으로 생성해주는 방법에 대해 알아보려 한다.
+
+<br />
